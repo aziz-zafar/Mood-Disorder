@@ -1,0 +1,86 @@
+---
+title: "Aracne_net"
+author: "Aziz"
+date: "7/9/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+
+```
+
+```{r, warnings =F}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("minet")
+BiocManager::install("Rgraphviz")
+library(minet)
+library(Rgraphviz)
+
+```
+
+```{r, warning= F, results='hide'}
+library(minet)
+library(Rgraphviz)
+library(foreign)
+library(officer)
+library(ggplot2)
+library(dplyr)
+library(igraph)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+data = read.spss("anova.sav", to.data.frame = T)
+set.seed(1)
+data = data[,!names(data) %in% c("SLEEP", "STAI")]
+for (method in c("mi.mm", "mi.sg", "mi.empirical", "mi.shrink","pearson", "spearman", "kendall")){
+  mat = matrix(0, ncol(data), ncol(data))
+  colnames(mat) = colnames(data)
+  rownames(mat) = colnames(data)
+  for (k in 1:100){
+    data_subset = data[sample(1:nrow(data), size = nrow(data), replace = T),]
+    mim <- build.mim(data_subset,estimator=method)
+    net <- aracne(mim)
+    for (i in 1:(ncol(data))){
+      for (j in 1:(ncol(data))){
+        if (net[i,j] >0){mat[i,j] = mat[i,j]+1}
+      }
+    }
+  }
+  
+  #mat[mat < 50] = 0
+  g1 = as(mat ,"graphNEL")
+  ew <- as.character(unlist(edgeWeights(g1)))
+  ew <- ew[setdiff(seq(along=ew), removedEdges(g1))]
+  names(ew) <- edgeNames(g1)
+  eAttrs = list()
+  attrs <- list(node=list(shape="ellipse", fixedsize=FALSE))
+  eAttrs$label <- ew
+  attrs$edge$fontsize <- 18
+  jpeg(file= paste(method, "_BDI_boot_.jpeg", sep =""), res =300, width = 5, height = 4, units ="in")
+  plot(main = method, g1, edgeAttrs=eAttrs, attrs=attrs, groups = list(c("AGE", "GENDER", "SOCIOSTATUS"), c("PER2", "PER3A", "PER3B"), c("CRY1", "CRY2")))
+  dev.off()
+  tkid <- tkplot(mat) #tkid is the id of the tkplot that will open 
+  l <- tkplot.getcoords(tkid) # grab the coordinates from tkplot 
+  plot(mat, layout=l)
+}
+```
+
+
+```{r}
+data = read.csv("processed_data.csv")
+data$MEQ = round(data$MEQ, digits =0)
+for (method in c("mi.mm", "mi.sg", "mi.empirical", "mi.shrink","pearson", "spearman", "kendall")){
+  mim <- build.mim(data,estimator=method)
+  net <- aracne(mim, eps =0)
+  tiff(file= paste(method, ".tiff", sep =""))
+  plot(main = method ,as(net ,"graphNEL"), )
+  dev.off()
+}
+```
+
+```{r setup, include=FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("GNET2")
+```
